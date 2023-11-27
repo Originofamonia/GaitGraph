@@ -52,3 +52,5 @@ models/*.weights
 models/*.pth
 data/*.csv
 save/*
+data/*/
+data/*.zip
