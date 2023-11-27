@@ -1,7 +1,8 @@
 import sys
-import time
+from time import time
+import datetime
 
-from torch.utils.data import DataLoader
+# from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from ray import tune
@@ -25,9 +26,9 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
     data_time = AverageMeter()
     losses = AverageMeter()
 
-    end = time.time()
+    end = time()
     for idx, (points, target) in enumerate(train_loader):
-        data_time.update(time.time() - end)
+        data_time.update(time() - end)
 
         points = torch.cat([points[0], points[1]], dim=0)
         labels = target[0]
@@ -55,8 +56,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
         optimizer.zero_grad()
 
         # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+        batch_time.update(time() - end)
+        end = time()
 
         # print info
         if (idx + 1) % opt.log_interval == 0:
@@ -71,7 +72,7 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
     return losses.avg
 
 
-def main(opt):
+def trainer(opt):
     opt = setup_environment(opt)
     graph = Graph("coco")
 
@@ -154,12 +155,12 @@ def main(opt):
     loss = 0
     for epoch in range(opt.start_epoch, opt.epochs + 1):
         # train for one epoch
-        time1 = time.time()
+        time1 = time()
         loss = train(
             train_loader, model, criterion, optimizer, scheduler, scaler, epoch, opt
         )
 
-        time2 = time.time()
+        time2 = time()
         print(f"epoch {epoch}, total time {time2 - time1:.2f}")
 
         # tensorboard logger
@@ -196,17 +197,18 @@ def main(opt):
     print(f"best accuracy: {best_acc*100:.2f}")
 
 
-def _inject_config(config):
+def _inject_config(config, opt):
     opt_new = {k: config[k] if k in config.keys() else v for k, v in vars(opt).items()}
-    main(argparse.Namespace(**opt_new))
+    trainer(argparse.Namespace(**opt_new))
 
 
-def tune_():
+def tune_(opt):
     hyperband = HyperBandScheduler(metric="accuracy", mode="max")
 
     analysis = tune.run(
         _inject_config,
         config={},
+        opt=opt,
         stop={"accuracy": 0.90, "training_iteration": 100},
         resources_per_trial={"gpu": 1},
         num_samples=10,
@@ -219,9 +221,7 @@ def tune_():
     print(df)
 
 
-if __name__ == "__main__":
-    import datetime
-
+def main():
     opt = parse_option()
 
     date = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -243,6 +243,10 @@ if __name__ == "__main__":
         opt.evaluation_fn = _evaluate_casia_b
 
     if opt.tune:
-        tune_()
+        tune_(opt)
     else:
-        main(opt)
+        trainer(opt)
+
+
+if __name__ == "__main__":
+    main()

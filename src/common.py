@@ -7,22 +7,26 @@ import models.ResGCNv1
 
 def parse_option():
     parser = argparse.ArgumentParser(description="Training model on gait sequence")
-    parser.add_argument("dataset", choices=["casia-b", "outdoor-gait", "tum-gaid"])
-    parser.add_argument("train_data_path", help="Path to train data CSV")
-    parser.add_argument("--valid_data_path", help="Path to validation data CSV")
+    parser.add_argument("dataset", type=str, default=f'casia-b', nargs='?',
+                        choices=["casia-b", "outdoor-gait", "tum-gaid"])
+    parser.add_argument("train_data_path", type=str, nargs='?',
+                        default=f'/home/edward/Documents/GaitGraph/data/casia-b_pose_train_valid.csv', 
+                        help="Path to train data CSV")
+    parser.add_argument("--valid_data_path", type=str, 
+                        default=f'/home/edward/Documents/GaitGraph/data/casia-b_pose_test.csv', 
+                        help="Path to validation data CSV")
     parser.add_argument("--valid_split", type=float, default=0.2)
 
     parser.add_argument("--checkpoint_path", help="Path to checkpoint to resume")
     parser.add_argument("--weight_path", help="Path to weights for model")
 
-    # Optionals
-    parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument("--num_workers", type=int, default=3)
     parser.add_argument(
         "--gpus", default="0", help="-1 for CPU, use comma for multiple gpus"
     )
-    parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--batch_size_validation", type=int, default=64)
-    parser.add_argument("--epochs", type=int, default=500)
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--batch_size_validation", type=int, default=128)
+    parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--start_epoch", type=int, default=1)
     parser.add_argument("--log_interval", type=int, default=10)
     parser.add_argument("--save_interval", type=int, default=50, help="save frequency")
@@ -36,10 +40,10 @@ def parse_option():
 
     parser.add_argument("--network_name", default="resgcn-n39-r4")
     parser.add_argument("--sequence_length", type=int, default=60)
-    parser.add_argument("--embedding_layer_size", type=int, default=256)
+    parser.add_argument("--embedding_layer_size", type=int, default=128)
     parser.add_argument("--temporal_kernel_size", type=int, default=9)
     parser.add_argument("--dropout", type=float, default=0.4)
-    parser.add_argument("--learning_rate", type=float, default=1e-3)
+    parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument(
         "--lr_decay_rate", type=float, default=0.1, help="decay rate for learning rate"
     )
@@ -50,7 +54,7 @@ def parse_option():
     parser.add_argument("--weight_decay", type=float, default=1e-5)
     parser.add_argument("--use_multi_branch", action="store_true")
     parser.add_argument(
-        "--temp", type=float, default=0.07, help="temperature for loss function"
+        "--temp", type=float, default=0.01, help="temperature for loss function"
     )
     opt = parser.parse_args()
 
@@ -83,10 +87,10 @@ def log_hyperparameter(writer, opt, accuracy, loss):
 
 def setup_environment(opt):
     # HACK: Fix tensorboard
-    import tensorflow as tf
+    # import tensorflow as tf
     import tensorboard as tb
 
-    tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
+    # tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
 
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpus_str
     opt.cuda = opt.gpus[0] >= 0
