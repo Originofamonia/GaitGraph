@@ -49,7 +49,7 @@ class ResGCN(nn.Module):
 
         # output
         self.global_pooling = nn.AdaptiveAvgPool2d(1)
-        self.fcn = nn.Linear(256, num_class)
+        self.fc = nn.Linear(256, num_class)
 
         # init parameters
         init_param(self.modules())
@@ -57,13 +57,13 @@ class ResGCN(nn.Module):
 
     def forward(self, x):
 
-        # N, I, C, T, V = x.size()
+        # N, I, C, T, V = x.size() # [B,1,3,60,17]
 
         # input branches
         x_cat = []
         for i, branch in enumerate(self.input_branches):
             x_cat.append(branch(x[:,i,:,:,:]))
-        x = torch.cat(x_cat, dim=1)
+        x = torch.cat(x_cat, dim=1)  # [B,32,60,17]
 
         # main stream
         for layer in self.main_stream:
@@ -71,7 +71,7 @@ class ResGCN(nn.Module):
 
         # output
         x = self.global_pooling(x)
-        x = self.fcn(x.squeeze())
+        x = self.fc(x.squeeze())
 
         # L2 normalization
         x = F.normalize(x, dim=1, p=2)

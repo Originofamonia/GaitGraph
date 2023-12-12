@@ -39,7 +39,7 @@ class PoseDataset(Dataset):
                 self.data_dict[target] = {}
 
             if len(row[1:]) != 51:
-                print("Invalid pose data for: ", target, ", frame: ", frame_num)
+                print(f"Invalid pose data for: {target}, frame: {frame_num}")
                 continue
             # Added try block to see if all the joint values are present. other wise skip that frame.
             try:
@@ -47,7 +47,7 @@ class PoseDataset(Dataset):
                     row[1:], dtype=np.float32
                 ).reshape((-1, 3))
             except ValueError:
-                print("Invalid pose data for: ", target, ", frame: ", frame_num)
+                print(f"Invalid pose data for: {target}, frame: {frame_num}")
                 continue
 
         # Check for data samples that have less than sequence_length frames and remove them.

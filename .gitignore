@@ -54,3 +54,4 @@ data/*.csv
 save/*
 data/*/
 data/*.zip
+# fatigue_hamza_code

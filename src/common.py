@@ -10,10 +10,10 @@ def parse_option():
     parser.add_argument("dataset", type=str, default=f'casia-b', nargs='?',
                         choices=["casia-b", "outdoor-gait", "tum-gaid"])
     parser.add_argument("train_data_path", type=str, nargs='?',
-                        default=f'/home/edward/Documents/GaitGraph/data/casia-b_pose_train_valid.csv', 
+                        default=f'/mnt/hdd/GaitGraph/data/casia-b_pose_train_valid.csv', 
                         help="Path to train data CSV")
     parser.add_argument("--valid_data_path", type=str, 
-                        default=f'/home/edward/Documents/GaitGraph/data/casia-b_pose_test.csv', 
+                        default=f'/mnt/hdd/GaitGraph/data/casia-b_pose_test.csv', 
                         help="Path to validation data CSV")
     parser.add_argument("--valid_split", type=float, default=0.2)
 
@@ -26,7 +26,7 @@ def parse_option():
     )
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--batch_size_validation", type=int, default=128)
-    parser.add_argument("--epochs", type=int, default=300)
+    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--start_epoch", type=int, default=1)
     parser.add_argument("--log_interval", type=int, default=10)
     parser.add_argument("--save_interval", type=int, default=50, help="save frequency")
