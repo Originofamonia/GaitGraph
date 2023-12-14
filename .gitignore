@@ -54,5 +54,6 @@ data/*.csv
 save/*
 data/*/
 data/*.zip
+data/*.pickle
 # fatigue_hamza_code
 output

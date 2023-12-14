@@ -7,10 +7,11 @@ import models.ResGCNv1
 
 def parse_option():
     parser = argparse.ArgumentParser(description="Training model on gait sequence")
-    parser.add_argument("dataset", type=str, default=f'casia-b', nargs='?',
-                        choices=["casia-b", "outdoor-gait", "tum-gaid"])
+    parser.add_argument("dataset", type=str, default=f'fatigue', nargs='?',
+                        choices=["casia-b", "outdoor-gait", "tum-gaid", 'fatigue'])
     parser.add_argument("train_data_path", type=str, nargs='?',
-                        default=f'/mnt/hdd/GaitGraph/data/casia-b_pose_train_valid.csv', 
+                        # default=f'/mnt/hdd/GaitGraph/data/casia-b_pose_train_valid.csv', 
+                        default=f'/mnt/hdd/GaitGraph/data/fatigue_gait.pickle',
                         help="Path to train data CSV")
     parser.add_argument("--valid_data_path", type=str, 
                         default=f'/mnt/hdd/GaitGraph/data/casia-b_pose_test.csv', 

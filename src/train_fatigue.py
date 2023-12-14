@@ -239,8 +239,8 @@ def main():
         os.makedirs(opt.save_folder)
 
     opt.evaluation_fn = None
-    if opt.dataset == "casia-b":
-        opt.evaluation_fn = _evaluate_casia_b
+    # if opt.dataset == "casia-b":
+    opt.evaluation_fn = _evaluate_casia_b
 
     if opt.tune:
         tune_(opt)
