@@ -7,13 +7,13 @@ import models.ResGCNv1
 
 def parse_option():
     parser = argparse.ArgumentParser(description="Training model on gait sequence")
-    parser.add_argument("dataset", type=str, default=f'casia-b', nargs='?',
+    parser.add_argument("dataset", type=str, default=f'fatigue', nargs='?',
                         choices=["casia-b", "outdoor-gait", "tum-gaid", 'fatigue'])
     parser.add_argument("train_data_path", type=str, nargs='?',
-                        default=f'/home/qiyuan/2023fall/GaitGraph/data/casia-b_pose_train_valid.csv',
+                        default=f'/home/qiyuan/2023fall/GaitGraph/data/fatigue_gait.pickle',
                         help="Path to train data CSV")
     parser.add_argument("--valid_data_path", type=str, 
-                        default=f'/home/qiyuan/2023fall/GaitGraph/data/casia-b_pose_test.csv', 
+                        default=f'/mnt/hdd/GaitGraph/data/casia-b_pose_test.csv', 
                         help="Path to validation data CSV")
     parser.add_argument("--valid_split", type=float, default=0.2)
 
@@ -39,7 +39,7 @@ def parse_option():
     parser.add_argument("--exp_name", help="Name of the experiment")
 
     parser.add_argument("--network_name", default="resgcn-n39-r4")
-    parser.add_argument("--sequence_length", type=int, default=60)
+    # parser.add_argument("--sequence_length", type=int, default=300)
     parser.add_argument("--embedding_layer_size", type=int, default=128)
     parser.add_argument("--temporal_kernel_size", type=int, default=9)
     parser.add_argument("--dropout", type=float, default=0.4)

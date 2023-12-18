@@ -7,7 +7,9 @@ import json
 import re
 import pickle
 import numpy as np
+import torch
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 
 
 def delete_superfluous_files():
@@ -113,25 +115,30 @@ class FatigueGait(Dataset):
     def __init__(
         self,
         data_path,
-        sequence_length=300,
         view='front',
         train=True,
         transform=None,
         target_transform=None,
     ):
         """
-        view: front or side, front min_len=305, side min_len=150
-        sequence_length: not sure if needed
+        view: front or side, front min,max_len=305,618; side min,max_len=150,457
+        sequence_length: no need
         """
         super(FatigueGait, self).__init__()
         with open(data_path, 'rb') as f:
             self.loaded_data = pickle.load(f)
         
-        self.data = [x for x in self.loaded_data if x[-1] == f'{view}view']
-        a = [x[0].shape[0] for x in self.data]
-        print(min(a))
-        self.sequence_length = sequence_length
-        self.train = train
+        self.viewed_data = [x for x in self.loaded_data if x[-1] == f'{view}view']
+        self.data = []
+        self.labels = []
+        self.label_mapping = {'after_activity': 1, 'baseline': 0, 'frontview': 2, 'sideview': 3}
+        self.max_length = max([x[0].shape[0] for x in self.viewed_data])
+        for i, seq in enumerate(self.viewed_data):
+            num_pad_rows = self.max_length - seq[0].shape[0]
+            pad_array = np.tile(seq[0][-1], (num_pad_rows, 1))
+            self.data.append(np.concatenate((seq[0], pad_array), axis=0))
+            self.labels.append((int(seq[1]),int(seq[2]),self.label_mapping[seq[3]], 
+                                self.label_mapping[seq[4]], seq[0].shape[0]))
 
         self.transform = transform
         self.target_transform = target_transform
@@ -139,10 +146,11 @@ class FatigueGait(Dataset):
         self.data_dict = {}
     
     def __len__(self):
-        return len(self.data)
+        return len(self.labels)
     
     def __getitem__(self, index):
-        x, user_id, session_id, label, view = self.data[index]
+        x = self.data[index]
+        user_id, session_id, label, view, length = self.labels[index]
         return x, label
 
 
@@ -150,4 +158,4 @@ if __name__ == '__main__':
     # delete_superfluous_files()
     # read_json()
     # read_fatigue_gait()
-    dataset = FatigueGait('output/fatigue_gait.pickle', view='front')
+    dataset = FatigueGait('output/fatigue_gait.pickle', view='side')

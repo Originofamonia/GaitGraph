@@ -2,7 +2,7 @@ import sys
 from time import time
 import datetime
 from sklearn.model_selection import KFold
-# from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from ray import tune
@@ -14,7 +14,7 @@ from datasets.graph import Graph
 from evaluate import evaluate, _evaluate_casia_b
 from losses import SupConLoss
 
-from common import *
+from common_fatigue import *
 from utils import AverageMeter
 
 
@@ -27,11 +27,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
     losses = AverageMeter()
 
     end = time()
-    for idx, (points, target) in enumerate(train_loader):
+    for idx, (points, labels) in enumerate(train_loader):
         data_time.update(time() - end)
-
-        points = torch.cat([points[0], points[1]], dim=0)
-        labels = target[0]
 
         if torch.cuda.is_available():
             points = points.cuda(non_blocking=True)
@@ -75,56 +72,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
 def trainer(opt):
     opt = setup_environment(opt)
     graph = Graph("coco")
-
-    # Dataset
-    transform = transforms.Compose(
-        [
-            MirrorPoses(opt.mirror_probability),
-            FlipSequence(opt.flip_probability),
-            RandomSelectSequence(opt.sequence_length),
-            ShuffleSequence(opt.shuffle),
-            PointNoise(std=opt.point_noise_std),
-            JointNoise(std=opt.joint_noise_std),
-            MultiInput(graph.connect_joint, opt.use_multi_branch),
-            ToTensor()
-        ],
-    )
-
-    dataset_class = dataset_factory(opt.dataset)
-    dataset = dataset_class(
-        opt.train_data_path,
-        train=True,
-        sequence_length=opt.sequence_length,
-        transform=TwoNoiseTransform(transform),
-    )
-
-    dataset_valid = dataset_class(
-        opt.valid_data_path,
-        sequence_length=opt.sequence_length,
-        transform=transforms.Compose(
-            [
-                SelectSequenceCenter(opt.sequence_length),
-                MultiInput(graph.connect_joint, opt.use_multi_branch),
-                ToTensor()
-            ]
-        ),
-    )
-
-    train_loader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=opt.batch_size,
-        num_workers=opt.num_workers,
-        pin_memory=True,
-        shuffle=True,
-    )
-
-    val_loader = torch.utils.data.DataLoader(
-        dataset_valid,
-        batch_size=opt.batch_size_validation,
-        num_workers=opt.num_workers,
-        pin_memory=True,
-    )
-
     # Model & criterion
     model, model_args = get_model_resgcn(graph, opt)
     criterion = SupConLoss(temperature=opt.temp)
@@ -137,56 +84,89 @@ def trainer(opt):
     if opt.cuda:
         model.cuda()
         criterion.cuda()
+    # Dataset
+    transform = transforms.Compose(
+        [
+            MirrorPoses(opt.mirror_probability),
+            FlipSequence(opt.flip_probability),
+            # RandomSelectSequence(opt.sequence_length),
+            ShuffleSequence(opt.shuffle),
+            PointNoise(std=opt.point_noise_std),
+            JointNoise(std=opt.joint_noise_std),
+            MultiInput(graph.connect_joint, opt.use_multi_branch),
+            ToTensor()
+        ],
+    )
 
-    # Trainer
-    optimizer, scheduler, scaler = get_trainer(model, opt, len(train_loader))
-
-    # Load checkpoint or weights
-    load_checkpoint(model, optimizer, scheduler, scaler, opt)
-
-    # Tensorboard
-    writer = SummaryWriter(log_dir=opt.tb_path)
-
-    sample_input = torch.zeros(opt.batch_size, model_args["num_input"], model_args["num_channel"],
-                               opt.sequence_length, graph.num_node).cuda()
-    writer.add_graph(model, input_to_model=sample_input)
-
+    dataset_class = dataset_factory(opt.dataset)
+    dataset = dataset_class(
+        opt.train_data_path,
+        # train=True,
+        # sequence_length=opt.sequence_length,
+        transform=TwoNoiseTransform(transform),
+    )
     best_acc = 0
     loss = 0
-    for epoch in range(opt.start_epoch, opt.epochs + 1):
-        # train for one epoch
-        time1 = time()
-        loss = train(
-            train_loader, model, criterion, optimizer, scheduler, scaler, epoch, opt
-        )
+    # Tensorboard
+    writer = SummaryWriter(log_dir=opt.tb_path)
+    sample_input = torch.zeros(opt.batch_size, model_args["num_input"], model_args["num_channel"],
+                            dataset.max_length, graph.num_node).cuda()
+    writer.add_graph(model, input_to_model=sample_input)
+    kfold = KFold(n_splits=5, shuffle=True)
+    # K-fold Cross Validation model evaluation
+    for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
+        # Print
+        print(f'FOLD {fold}')
+        # Sample elements randomly from a given list of ids, no replacement.
+        train_subsampler = SubsetRandomSampler(train_ids)
+        test_subsampler = SubsetRandomSampler(test_ids)
 
-        time2 = time()
-        print(f"epoch {epoch}, total time {time2 - time1:.2f}")
+        # Define data loaders for training and testing data in this fold
+        trainloader = DataLoader(dataset, batch_size=opt.batch_size, 
+            num_workers=opt.num_workers, pin_memory=True, sampler=train_subsampler)
+        testloader = DataLoader(dataset, batch_size=opt.batch_size, 
+            num_workers=opt.num_workers, pin_memory=True, sampler=test_subsampler)
+    
+        # Trainer
+        optimizer, scheduler, scaler = get_trainer(model, opt, len(trainloader))
 
-        # tensorboard logger
-        writer.add_scalar("loss/train", loss, epoch)
-        writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], epoch)
+        # Load checkpoint or weights
+        load_checkpoint(model, optimizer, scheduler, scaler, opt)
 
-        # evaluation
-        result, accuracy_avg, sub_accuracies, dataframe = evaluate(
-            val_loader, model, opt.evaluation_fn, use_flip=True
-        )
-        writer.add_text("accuracy/validation", dataframe.to_markdown(), epoch)
-        writer.add_scalar("accuracy/validation", accuracy_avg, epoch)
-        for key, sub_accuracy in sub_accuracies.items():
-            writer.add_scalar(f"accuracy/validation/{key}", sub_accuracy, epoch)
+        for epoch in range(opt.start_epoch, opt.epochs + 1):
+            # train for one epoch
+            time1 = time()
+            loss = train(
+                trainloader, model, criterion, optimizer, scheduler, scaler, epoch, opt
+            )
 
-        print(f"epoch {epoch}, avg accuracy {accuracy_avg:.4f}")
-        is_best = accuracy_avg > best_acc
-        if is_best:
-            best_acc = accuracy_avg
+            time2 = time()
+            print(f"epoch {epoch}, total time {time2 - time1:.2f}")
 
-        if opt.tune:
-            tune.report(accuracy=accuracy_avg)
+            # tensorboard logger
+            writer.add_scalar("loss/train", loss, epoch)
+            writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], epoch)
 
-        if epoch % opt.save_interval == 0 or (is_best and epoch > opt.save_best_start * opt.epochs):
-            save_file = os.path.join(opt.save_folder, f"ckpt_epoch_{'best' if is_best else epoch}.pth")
-            save_model(model, optimizer, scheduler, scaler, opt, opt.epochs, save_file)
+            # evaluation
+            result, accuracy_avg, sub_accuracies, dataframe = evaluate(
+                testloader, model, opt.evaluation_fn, use_flip=True
+            )
+            writer.add_text("accuracy/validation", dataframe.to_markdown(), epoch)
+            writer.add_scalar("accuracy/validation", accuracy_avg, epoch)
+            for key, sub_accuracy in sub_accuracies.items():
+                writer.add_scalar(f"accuracy/validation/{key}", sub_accuracy, epoch)
+
+            print(f"epoch {epoch}, avg accuracy {accuracy_avg:.4f}")
+            is_best = accuracy_avg > best_acc
+            if is_best:
+                best_acc = accuracy_avg
+
+            if opt.tune:
+                tune.report(accuracy=accuracy_avg)
+
+            if epoch % opt.save_interval == 0 or (is_best and epoch > opt.save_best_start * opt.epochs):
+                save_file = os.path.join(opt.save_folder, f"ckpt_epoch_{'best' if is_best else epoch}.pth")
+                save_model(model, optimizer, scheduler, scaler, opt, opt.epochs, save_file)
 
     # save the last model
     save_file = os.path.join(opt.save_folder, "last.pth")
