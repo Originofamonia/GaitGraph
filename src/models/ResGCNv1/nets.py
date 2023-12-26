@@ -50,6 +50,7 @@ class ResGCN(nn.Module):
         # output
         self.global_pooling = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(256, num_class)
+        self.softmax = nn.Softmax(dim=1)
 
         # init parameters
         init_param(self.modules())
@@ -61,8 +62,12 @@ class ResGCN(nn.Module):
 
         # input branches
         x_cat = []
-        for i, branch in enumerate(self.input_branches):
-            x_cat.append(branch(x[:,i,:,:,:]))
+        if len(x.shape) > 4:
+            for i, branch in enumerate(self.input_branches):
+                x_cat.append(branch(x[:,i,:,:,:]))
+        else:
+            for i, branch in enumerate(self.input_branches):
+                x_cat.append(branch(x))
         x = torch.cat(x_cat, dim=1)  # [B,32,60,17]
 
         # main stream
@@ -71,12 +76,12 @@ class ResGCN(nn.Module):
 
         # output
         x = self.global_pooling(x)
-        x = self.fc(x.squeeze())
+        x = self.softmax(self.fc(x.squeeze()))
 
         # L2 normalization
-        x = F.normalize(x, dim=1, p=2)
+        # x = F.normalize(x, dim=1, p=2)
 
-        return x
+        return x.squeeze()
 
 
 def init_param(modules):

@@ -2,7 +2,7 @@ from .preparation import DatasetSimple, DatasetDetections
 from .gait import (
     CasiaBPose,
 )
-from .fagitue_gait import FatigueGait
+from .fagitue_dataset import FatigueGait
 
 
 def dataset_factory(name):

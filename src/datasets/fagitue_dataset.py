@@ -136,7 +136,8 @@ class FatigueGait(Dataset):
         for i, seq in enumerate(self.viewed_data):
             num_pad_rows = self.max_length - seq[0].shape[0]
             pad_array = np.tile(seq[0][-1], (num_pad_rows, 1))
-            self.data.append(np.concatenate((seq[0], pad_array), axis=0))
+            padded_array = np.concatenate((seq[0], pad_array), axis=0).reshape(3,-1,25)
+            self.data.append(padded_array)  # .reshape((1,3,-1))
             self.labels.append((int(seq[1]),int(seq[2]),self.label_mapping[seq[3]], 
                                 self.label_mapping[seq[4]], seq[0].shape[0]))
 
@@ -151,7 +152,7 @@ class FatigueGait(Dataset):
     def __getitem__(self, index):
         x = self.data[index]
         user_id, session_id, label, view, length = self.labels[index]
-        return x, label
+        return x, np.float32(label)
 
 
 if __name__ == '__main__':

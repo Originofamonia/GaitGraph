@@ -17,6 +17,8 @@ from losses import SupConLoss
 from common import *
 from utils import AverageMeter
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+
 
 def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, opt):
     """one epoch training"""

@@ -17,7 +17,8 @@ def parse_option():
                         help="Path to validation data CSV")
     parser.add_argument("--valid_split", type=float, default=0.2)
 
-    parser.add_argument("--checkpoint_path", help="Path to checkpoint to resume")
+    parser.add_argument("--checkpoint_path", help="Path to checkpoint to resume", type=str, 
+                        default=f'')
     parser.add_argument("--weight_path", help="Path to weights for model")
 
     parser.add_argument("--num_workers", type=int, default=3)
@@ -38,7 +39,7 @@ def parse_option():
     parser.add_argument("--shuffle", action="store_true")
     parser.add_argument("--exp_name", help="Name of the experiment")
 
-    parser.add_argument("--network_name", default="resgcn-n39-r4")
+    parser.add_argument("--network_name", default="resgcn-n39-r8")
     parser.add_argument("--sequence_length", type=int, default=60)
     parser.add_argument("--embedding_layer_size", type=int, default=128)
     parser.add_argument("--temporal_kernel_size", type=int, default=9)
@@ -141,7 +142,7 @@ def get_trainer(model, opt, steps_per_epoch):
 
 
 def load_checkpoint(model, optimizer, scheduler, scaler, opt):
-    if opt.checkpoint_path is not None:
+    if opt.checkpoint_path:
         checkpoint = torch.load(opt.checkpoint_path)
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
@@ -149,7 +150,7 @@ def load_checkpoint(model, optimizer, scheduler, scaler, opt):
         scaler.load_state_dict(checkpoint["scaler"])
         opt.start_epoch = checkpoint["epoch"]
 
-    if opt.weight_path is not None:
+    if opt.weight_path:
         checkpoint = torch.load(opt.weight_path)
         model.load_state_dict(checkpoint["model"], strict=False)
 

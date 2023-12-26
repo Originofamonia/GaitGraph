@@ -6,6 +6,7 @@ import pandas
 import torch
 from torchvision import transforms
 from torch.utils.data import DataLoader
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
 from common import get_model_resgcn
 from utils import AverageMeter
@@ -93,6 +94,8 @@ def evaluate(data_loader, model, evaluation_fn, log_interval=10, use_flip=False)
         end = time.time()
         embeddings = dict()
         for idx, (points, target) in enumerate(data_loader):
+            if isinstance(points, list):
+                points = points[0]
             if use_flip:
                 bsz = points.shape[0]
                 data_flipped = torch.flip(points, dims=[1])
@@ -124,6 +127,65 @@ def evaluate(data_loader, model, evaluation_fn, log_interval=10, use_flip=False)
                 sys.stdout.flush()
 
     return evaluation_fn(embeddings)
+
+
+def evaluate_fatigue(data_loader, model, log_interval=10, use_flip=False):
+    """
+    TODO: write custom evaluate fn
+    """
+    model.eval()
+    batch_time = AverageMeter()
+
+    # Calculate embeddings
+    with torch.no_grad():
+        end = time.time()
+        embeddings = dict()
+        for idx, (points, target) in enumerate(data_loader):
+            if isinstance(points, list):
+                points = points[0]
+            if use_flip:
+                bsz = points.shape[0]
+                data_flipped = torch.flip(points, dims=[1])
+                points = torch.cat([points, data_flipped], dim=0)
+
+            if torch.cuda.is_available():
+                points = points.cuda(non_blocking=True)
+
+            preds = model(points)
+
+            preds_np = preds.detach().cpu().numpy()
+            targets_np = target.detach().cpu().numpy()
+
+            
+            # Calculate metrics
+            p = precision_score(targets_np, preds_np, average='binary')
+            r = recall_score(targets_np, preds_np, average='binary')
+            f1 = f1_score(targets_np, preds_np, average='binary')
+            acc = accuracy_score(targets_np, preds_np)
+
+            # print(f"Precision: {p}, Recall: {r}, F1-score: {f1}, Accuracy: {acc}")
+
+            # if use_flip:
+            #     f1, f2 = torch.split(output, [bsz, bsz], dim=0)
+            #     output = torch.mean(torch.stack([f1, f2]), dim=0)
+
+            # for i in range(output.shape[0]):
+            #     sequence = tuple(
+            #         int(t[i]) if type(t[i]) is torch.Tensor else t[i] for t in target
+            #     )
+            #     embeddings[sequence] = output[i].cpu().numpy()
+
+            # batch_time.update(time.time() - end)
+            # end = time.time()
+
+            # if idx % log_interval == 0:
+            #     print(
+            #         f"Test: [{idx}/{len(data_loader)}]\t"
+            #         f"Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t"
+            #     )
+            #     sys.stdout.flush()
+
+    return p, r, f1, acc
 
 
 def main():

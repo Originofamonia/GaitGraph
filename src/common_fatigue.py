@@ -17,14 +17,16 @@ def parse_option():
                         help="Path to validation data CSV")
     parser.add_argument("--valid_split", type=float, default=0.2)
 
-    parser.add_argument("--checkpoint_path", help="Path to checkpoint to resume")
-    parser.add_argument("--weight_path", help="Path to weights for model")
+    parser.add_argument("--checkpoint_path", help="Path to checkpoint to resume", type=str, 
+                        default=f'')
+    parser.add_argument("--weight_path", help="Path to weights for model", 
+                        type=str, default=f'/home/qiyuan/2023fall/GaitGraph/models/gaitgraph_resgcn-n39-r8_coco_seq_60.pth')
 
     parser.add_argument("--num_workers", type=int, default=3)
     parser.add_argument(
-        "--gpus", default="0", help="-1 for CPU, use comma for multiple gpus"
+        "--gpus", default="1", help="-1 for CPU, use comma for multiple gpus"
     )
-    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--batch_size_validation", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--start_epoch", type=int, default=1)
@@ -38,12 +40,12 @@ def parse_option():
     parser.add_argument("--shuffle", action="store_true")
     parser.add_argument("--exp_name", help="Name of the experiment")
 
-    parser.add_argument("--network_name", default="resgcn-n39-r4")
+    parser.add_argument("--network_name", default="resgcn-n39-r8")
     # parser.add_argument("--sequence_length", type=int, default=300)
     parser.add_argument("--embedding_layer_size", type=int, default=128)
     parser.add_argument("--temporal_kernel_size", type=int, default=9)
     parser.add_argument("--dropout", type=float, default=0.4)
-    parser.add_argument("--learning_rate", type=float, default=1e-2)
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument(
         "--lr_decay_rate", type=float, default=0.1, help="decay rate for learning rate"
     )
@@ -52,7 +54,7 @@ def parse_option():
     parser.add_argument("--flip_probability", type=float, default=0.5)
     parser.add_argument("--mirror_probability", type=float, default=0.5)
     parser.add_argument("--weight_decay", type=float, default=1e-5)
-    parser.add_argument("--use_multi_branch", action="store_true")
+    parser.add_argument("--use_multi_branch", type=bool, default=False)
     parser.add_argument(
         "--temp", type=float, default=0.01, help="temperature for loss function"
     )
@@ -120,7 +122,7 @@ def get_model_stgcn(opt):
 def get_model_resgcn(graph, opt):
     model_args = {
         "A": torch.tensor(graph.A, dtype=torch.float32, requires_grad=False),
-        "num_class": opt.embedding_layer_size,
+        "num_class": 1,  # was opt.embedding_layer_size
         "num_input": 1 if not opt.use_multi_branch else 3,
         "num_channel": 3 if not opt.use_multi_branch else 6,
         "parts": graph.parts,
@@ -141,7 +143,7 @@ def get_trainer(model, opt, steps_per_epoch):
 
 
 def load_checkpoint(model, optimizer, scheduler, scaler, opt):
-    if opt.checkpoint_path is not None:
+    if opt.checkpoint_path:
         checkpoint = torch.load(opt.checkpoint_path)
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
@@ -149,9 +151,23 @@ def load_checkpoint(model, optimizer, scheduler, scaler, opt):
         scaler.load_state_dict(checkpoint["scaler"])
         opt.start_epoch = checkpoint["epoch"]
 
-    if opt.weight_path is not None:
-        checkpoint = torch.load(opt.weight_path)
-        model.load_state_dict(checkpoint["model"], strict=False)
+    if opt.weight_path:
+        # checkpoint = torch.load(opt.weight_path)
+        # model.load_state_dict(checkpoint["model"], strict=False)
+
+        old_model = torch.load(opt.weight_path)['model']
+        # old_model_trim = {}
+        # for k, v in old_model.items():
+        #     if not k.endswith('A') and not k.endswith('edge'):
+        #         old_model_trim[k] = v
+        old_model_trim = {k:v for k, v in old_model.items() if not k.endswith('A') and not k.endswith('edge')}
+        new_state_dict = model.state_dict()
+
+        # Update the new state dict with the old state dict (this will only update the layers that have the same keys)
+        new_state_dict.update(old_model)
+
+        # Load the updated state dict into the new model
+        model.load_state_dict(old_model_trim, strict=False)
 
 
 def save_model(model, optimizer, scheduler, scaler, opt, epoch, save_file):

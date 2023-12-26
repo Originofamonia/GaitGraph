@@ -1,8 +1,10 @@
+import os
 import sys
 from time import time
 import datetime
 from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, SubsetRandomSampler
+import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from ray import tune
@@ -11,11 +13,13 @@ from ray.tune.schedulers import HyperBandScheduler
 from datasets import dataset_factory
 from datasets.augmentation import *
 from datasets.graph import Graph
-from evaluate import evaluate, _evaluate_casia_b
+from evaluate import evaluate, _evaluate_casia_b, evaluate_fatigue
 from losses import SupConLoss
 
 from common_fatigue import *
 from utils import AverageMeter
+
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 
 def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, opt):
@@ -30,27 +34,30 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
     for idx, (points, labels) in enumerate(train_loader):
         data_time.update(time() - end)
 
+        # points = torch.cat([points[0], points[1]], dim=0)
         if torch.cuda.is_available():
-            points = points.cuda(non_blocking=True)
-            labels = labels.cuda(non_blocking=True)
+            points = points.cuda(non_blocking=False)
+            labels = labels.cuda(non_blocking=False)
         bsz = labels.shape[0]
+        optimizer.zero_grad()
 
         with torch.cuda.amp.autocast(enabled=opt.use_amp):
             # compute loss
-            features = model(points)
-            f1, f2 = torch.split(features, [bsz, bsz], dim=0)
-            features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-            loss = criterion(features, labels)
+            logits = model(points)
+            # f1, f2 = torch.split(features, [bsz, bsz], dim=0)
+            # features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+            loss = criterion(logits, labels)
 
         # update metric
         losses.update(loss.item(), bsz)
 
         # SGD
         scaler.scale(loss).backward()
+        # loss.backward()
         scaler.step(optimizer)
+        # optimizer.step()
         scheduler.step()
         scaler.update()
-        optimizer.zero_grad()
 
         # measure elapsed time
         batch_time.update(time() - end)
@@ -71,10 +78,11 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
 
 def trainer(opt):
     opt = setup_environment(opt)
-    graph = Graph("coco")
+    graph = Graph("ntu")
     # Model & criterion
     model, model_args = get_model_resgcn(graph, opt)
-    criterion = SupConLoss(temperature=opt.temp)
+    # criterion = SupConLoss(temperature=opt.temp)
+    criterion = nn.BCELoss()
 
     print("# parameters: ", count_parameters(model))
 
@@ -126,7 +134,7 @@ def trainer(opt):
             num_workers=opt.num_workers, pin_memory=True, sampler=train_subsampler)
         testloader = DataLoader(dataset, batch_size=opt.batch_size, 
             num_workers=opt.num_workers, pin_memory=True, sampler=test_subsampler)
-    
+
         # Trainer
         optimizer, scheduler, scaler = get_trainer(model, opt, len(trainloader))
 
@@ -148,21 +156,24 @@ def trainer(opt):
             writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], epoch)
 
             # evaluation
-            result, accuracy_avg, sub_accuracies, dataframe = evaluate(
-                testloader, model, opt.evaluation_fn, use_flip=True
+            p, r, f1, acc = evaluate_fatigue(
+                testloader, model, opt.evaluation_fn, use_flip=False
             )
-            writer.add_text("accuracy/validation", dataframe.to_markdown(), epoch)
-            writer.add_scalar("accuracy/validation", accuracy_avg, epoch)
-            for key, sub_accuracy in sub_accuracies.items():
-                writer.add_scalar(f"accuracy/validation/{key}", sub_accuracy, epoch)
+            # writer.add_text("accuracy/validation", dataframe.to_markdown(), epoch)
+            writer.add_scalar("precision", p, epoch)
+            writer.add_scalar("recall", r, epoch)
+            writer.add_scalar("f1", f1, epoch)
+            writer.add_scalar("accuracy", acc, epoch)
+            # for key, sub_accuracy in sub_accuracies.items():
+            #     writer.add_scalar(f"accuracy/validation/{key}", sub_accuracy, epoch)
 
-            print(f"epoch {epoch}, avg accuracy {accuracy_avg:.4f}")
-            is_best = accuracy_avg > best_acc
+            print(f"E: {epoch}, P: {p:.4f}, R: {r:.4f}, F1: {f1:.4f}, Acc: {acc:.4f}, loss: {loss:.4f}")
+            is_best = acc > best_acc
             if is_best:
-                best_acc = accuracy_avg
+                best_acc = acc
 
             if opt.tune:
-                tune.report(accuracy=accuracy_avg)
+                tune.report(accuracy=acc)
 
             if epoch % opt.save_interval == 0 or (is_best and epoch > opt.save_best_start * opt.epochs):
                 save_file = os.path.join(opt.save_folder, f"ckpt_epoch_{'best' if is_best else epoch}.pth")
