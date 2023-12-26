@@ -36,8 +36,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, o
 
         # points = torch.cat([points[0], points[1]], dim=0)
         if torch.cuda.is_available():
-            points = points.cuda(non_blocking=False)
-            labels = labels.cuda(non_blocking=False)
+            points = points.cuda(non_blocking=True)
+            labels = labels.cuda(non_blocking=True)
         bsz = labels.shape[0]
         optimizer.zero_grad()
 
