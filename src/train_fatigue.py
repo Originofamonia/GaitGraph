@@ -109,7 +109,7 @@ def trainer(opt):
     dataset_class = dataset_factory(opt.dataset)
     dataset = dataset_class(
         opt.train_data_path,
-        # train=True,
+        opt.view,
         # sequence_length=opt.sequence_length,
         transform=TwoNoiseTransform(transform),
     )
@@ -124,7 +124,7 @@ def trainer(opt):
     # K-fold Cross Validation model evaluation
     for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
         # Print
-        print(f'FOLD {fold}')
+        print(f'Fold: {fold}')
         # Sample elements randomly from a given list of ids, no replacement.
         train_subsampler = SubsetRandomSampler(train_ids)
         test_subsampler = SubsetRandomSampler(test_ids)

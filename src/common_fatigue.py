@@ -26,8 +26,8 @@ def parse_option():
     parser.add_argument(
         "--gpus", default="1", help="-1 for CPU, use comma for multiple gpus"
     )
-    parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--batch_size_validation", type=int, default=128)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--batch_size_validation", type=int, default=32)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--start_epoch", type=int, default=1)
     parser.add_argument("--log_interval", type=int, default=5)
@@ -41,6 +41,7 @@ def parse_option():
     parser.add_argument("--exp_name", help="Name of the experiment")
 
     parser.add_argument("--network_name", default="resgcn-n39-r8")
+    parser.add_argument("--view", type=str, default="side")
     # parser.add_argument("--sequence_length", type=int, default=300)
     parser.add_argument("--embedding_layer_size", type=int, default=128)
     parser.add_argument("--temporal_kernel_size", type=int, default=9)

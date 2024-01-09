@@ -116,7 +116,7 @@ class FatigueGait(Dataset):
         self,
         data_path,
         view='front',
-        train=True,
+        # train=True,
         transform=None,
         target_transform=None,
     ):
